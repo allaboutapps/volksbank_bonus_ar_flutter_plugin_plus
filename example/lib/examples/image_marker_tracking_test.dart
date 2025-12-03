@@ -34,24 +34,18 @@ class _ImageMarkerTrackingState extends State<ImageMarkerTracking> {
     this.arLocationManager = arLocationManager;
 
     this.arSessionManager!.onInitialize(
-      showFeaturePoints: false,
       showAnimatedGuide: false,
+      showFeaturePoints: false,
       showPlanes: false,
       customPlaneTexturePath: "Images/triangle.png",
       showWorldOrigin: false,
-      handleTaps: true,
+      handleTaps: false,
       trackingImagePaths: [
         "Images/augmented-images-earth.jpg",
       ],
     );
     this.arObjectManager!.onInitialize();
-    this.arObjectManager!.onNodeTap = onNodeTap;
     this.arSessionManager!.onImageDetected = onImageDetected;
-  }
-
-  void onNodeTap(List<String> nodes) {
-    print("Node tapped: $nodes");
-    final i = 1;
   }
 
   void onImageDetected(String imageName, Matrix4 transformation) {
@@ -65,8 +59,14 @@ class _ImageMarkerTrackingState extends State<ImageMarkerTracking> {
     placeObjectOnImage(imageName, transformation);
   }
 
+  String? lastImageName;
   Future<void> placeObjectOnImage(String imageName, Matrix4 transformation) async {
     try {
+      // if (lastImageName == imageName) {
+      //   return;
+      // }
+      // lastImageName = imageName;
+
       // Create a new anchor at the image position
       var imageAnchor = ARPlaneAnchor(transformation: transformation);
 
@@ -87,27 +87,29 @@ class _ImageMarkerTrackingState extends State<ImageMarkerTracking> {
         // Create a 3D object to place on the image
         double scale = 0.05;
         var imageNode = ARNode(
-          name: 'chicken',
           type: NodeType.localGLTF2,
           uri: modelUrl,
-          transformation: Matrix4(
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-            scale,
-          ),
+          // scale: Vector3(scale, scale, scale),
+
+          // transformation: Matrix4.diagonal3(Vector3(scale, scale, scale)),
+          // transformation: Matrix4(
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          //   scale,
+          // ),
           position: Vector3(0.0, 0.0, 0.0),
           rotation: Vector4(1.0, 0.0, 0.0, 0.0),
         );
@@ -116,10 +118,9 @@ class _ImageMarkerTrackingState extends State<ImageMarkerTracking> {
 
         if (didAddNodeToAnchor == true) {
           node = imageNode;
-              final newTransform = Matrix4.identity();
+          final newTransform = Matrix4.identity();
           newTransform.scale(.1);
           node!.transform = newTransform;
-
           print("Successfully placed object on image: $imageName");
         } else {
           arSessionManager!.onError("Adding Node to Image Anchor failed");

@@ -22,8 +22,8 @@ dependencies:
   cupertino_icons: ^1.0.2
 
   # Firebase dependencies to shared and manage cloud anchor IDs and related content
-  firebase_core: ^4.2.0
-  cloud_firestore: ^6.0.3
+  # firebase_core: ^4.2.0
+  # cloud_firestore: ^6.0.3
   geoflutterfire_plus: ^0.0.33
   path_provider: ^2.1.5
   flutter_archive: ^6.0.3

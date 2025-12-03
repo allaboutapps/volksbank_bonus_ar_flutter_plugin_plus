@@ -8,11 +8,11 @@ version = "1.0-SNAPSHOT"
 
 android {
     namespace = "tech.graaf.franz.ar_flutter_plugin_plus"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 36
     }
 
     sourceSets {
@@ -39,7 +39,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0")
 
     // Google ARCore + Sceneform
-    implementation("com.google.ar:core:1.42.0")
+    implementation("com.google.ar:core:1.51.0")
     implementation("com.google.ar.sceneform:core:1.17.1")
     implementation("com.google.ar.sceneform:assets:1.17.1")
     implementation("com.google.ar.sceneform.ux:sceneform-ux:1.17.1")

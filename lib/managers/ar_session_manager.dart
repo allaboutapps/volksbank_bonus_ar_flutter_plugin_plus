@@ -9,8 +9,7 @@ import 'package:vector_math/vector_math_64.dart';
 
 // Type definitions to enforce a consistent use of the API
 typedef ARHitResultHandler = void Function(List<ARHitTestResult> hits);
-typedef ARImageDetectionResultHandler = void Function(
-    String imageName, Matrix4 transformation);
+typedef ARImageDetectionResultHandler = void Function(String imageName, Matrix4 transformation);
 
 /// Manages the session configuration, parameters and events of an [ARView]
 class ARSessionManager {
@@ -27,13 +26,12 @@ class ARSessionManager {
   final PlaneDetectionConfig planeDetectionConfig;
 
   /// Receives hit results from user taps with tracked planes or feature points
-  late ARHitResultHandler onPlaneOrPointTap;
+  ARHitResultHandler? onPlaneOrPointTap;
 
   /// Receives detection results when tracked images are detected
   ARImageDetectionResultHandler? onImageDetected;
 
-  ARSessionManager(int id, this.buildContext, this.planeDetectionConfig,
-      {this.debug = false}) {
+  ARSessionManager(int id, this.buildContext, this.planeDetectionConfig, {this.debug = false}) {
     _channel = MethodChannel('arsession_$id');
     _channel.setMethodCallHandler(_platformCallHandler);
     if (debug) {
@@ -44,8 +42,7 @@ class ARSessionManager {
   /// Returns the camera pose in Matrix4 format with respect to the world coordinate system of the [ARView]
   Future<Matrix4?> getCameraPose() async {
     try {
-      final serializedCameraPose =
-          await _channel.invokeMethod<List<dynamic>>('getCameraPose', {});
+      final serializedCameraPose = await _channel.invokeMethod<List<dynamic>>('getCameraPose', {});
       return MatrixConverter().fromJson(serializedCameraPose!);
     } catch (e) {
       print('Error caught: ' + e.toString());
@@ -59,8 +56,7 @@ class ARSessionManager {
       if (anchor.name.isEmpty) {
         throw Exception("Anchor can not be resolved. Anchor name is empty.");
       }
-      final serializedCameraPose =
-          await _channel.invokeMethod<List<dynamic>>('getAnchorPose', {
+      final serializedCameraPose = await _channel.invokeMethod<List<dynamic>>('getAnchorPose', {
         "anchorId": anchor.name,
       });
       return MatrixConverter().fromJson(serializedCameraPose!);
@@ -71,8 +67,7 @@ class ARSessionManager {
   }
 
   /// Returns the distance in meters between @anchor1 and @anchor2.
-  Future<double?> getDistanceBetweenAnchors(
-      ARAnchor anchor1, ARAnchor anchor2) async {
+  Future<double?> getDistanceBetweenAnchors(ARAnchor anchor1, ARAnchor anchor2) async {
     var anchor1Pose = await getPose(anchor1);
     var anchor2Pose = await getPose(anchor2);
     var anchor1Translation = anchor1Pose?.getTranslation();
@@ -118,20 +113,17 @@ class ARSessionManager {
           break;
         case 'onPlaneOrPointTap':
           final rawHitTestResults = call.arguments as List<dynamic>;
-          final serializedHitTestResults = rawHitTestResults
-              .map((hitTestResult) => Map<String, dynamic>.from(hitTestResult))
-              .toList();
+          final serializedHitTestResults = rawHitTestResults.map((hitTestResult) => Map<String, dynamic>.from(hitTestResult)).toList();
           final hitTestResults = serializedHitTestResults.map((e) {
             return ARHitTestResult.fromJson(e);
           }).toList();
-          onPlaneOrPointTap(hitTestResults);
+          onPlaneOrPointTap?.call(hitTestResults);
           break;
         case 'onImageDetected':
           if (onImageDetected != null) {
             final arguments = call.arguments as Map<dynamic, dynamic>;
             final imageName = arguments['imageName'] as String;
-            final transformation = MatrixConverter()
-                .fromJson(arguments['transformation'] as List<dynamic>);
+            final transformation = MatrixConverter().fromJson(arguments['transformation'] as List<dynamic>);
             onImageDetected!(imageName, transformation);
           }
           break;
@@ -181,10 +173,7 @@ class ARSessionManager {
   onError(String errorMessage) {
     ScaffoldMessenger.of(buildContext).showSnackBar(SnackBar(
         content: Text(errorMessage),
-        action: SnackBarAction(
-            label: 'HIDE',
-            onPressed:
-                ScaffoldMessenger.of(buildContext).hideCurrentSnackBar)));
+        action: SnackBarAction(label: 'HIDE', onPressed: ScaffoldMessenger.of(buildContext).hideCurrentSnackBar)));
   }
 
   /// Dispose the AR view on the platforms to pause the scenes and disconnect the platform handlers.

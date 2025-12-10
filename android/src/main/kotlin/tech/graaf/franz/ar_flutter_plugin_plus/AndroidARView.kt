@@ -1048,7 +1048,7 @@ internal class AndroidARView(
                         Log.d(TAG, "Loading image: $imageName, size: ${bitmap.width}x${bitmap.height}")
                         
                         // Set physical width (important for detection quality)
-                        val physicalWidth = 0.2f // 20cm - adjust based on your actual printed image size
+                        val physicalWidth = 0.1f // 10cm - adjust based on your actual printed image size
                         val index = imageDatabase.addImage(imageName, bitmap, physicalWidth)
                         
                         if (index != -1) {

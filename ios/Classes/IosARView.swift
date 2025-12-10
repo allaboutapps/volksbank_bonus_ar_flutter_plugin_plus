@@ -341,6 +341,15 @@ class IosARView: NSObject, FlutterPlatformView, ARSCNViewDelegate, UIGestureReco
         if let trackingImagePaths = arguments["trackingImagePaths"] as? [String] {
             setupImageTracking(imagePaths: trackingImagePaths)
         }
+
+        // Always use these lighting settings for testing
+        var lightingArguments = arguments
+        lightingArguments["lightingIntensity"] = 1.5  // Brighter
+        lightingArguments["addAmbientLight"] = true
+        lightingArguments["ambientLightIntensity"] = 200.0
+
+        // Configure lighting
+        configureLighting(arguments: lightingArguments)
     
         // Update session configuration
         self.sceneView.session.run(configuration)
@@ -927,6 +936,73 @@ class IosARView: NSObject, FlutterPlatformView, ARSCNViewDelegate, UIGestureReco
         DispatchQueue.main.async {
             self.sessionManagerChannel.invokeMethod("onImageDetected", arguments: arguments)
             print("✅ Sent image detection to Flutter: \(imageName)")
+        }
+    }
+    
+    // MARK: - Lighting Configuration
+    
+    func configureLighting(arguments: Dictionary<String, Any>) {
+        // Configure SceneKit scene lighting environment
+        // This controls how the scene responds to ARKit's automatic lighting estimation
+        
+        // Set lighting intensity (0.0 to 1.0, default is 1.0)
+        // Higher values make objects brighter, lower values make them darker
+        if let lightingIntensity = arguments["lightingIntensity"] as? Double {
+            self.sceneView.scene.lightingEnvironment.intensity = CGFloat(lightingIntensity)
+        } else {
+            // Default intensity
+            self.sceneView.scene.lightingEnvironment.intensity = 1.0
+        }
+        
+        // Configure automatic lighting estimation from ARKit
+        // This uses the real-world lighting conditions detected by the camera
+        if let wantsHDREnvironmentTextures = arguments["wantsHDREnvironmentTextures"] as? Bool {
+            if #available(iOS 12.0, *) {
+                self.configuration.wantsHDREnvironmentTextures = wantsHDREnvironmentTextures
+            }
+        }
+        
+        // Add manual directional light (optional)
+        // This can be used to add additional lighting beyond ARKit's automatic estimation
+        if let addDirectionalLight = arguments["addDirectionalLight"] as? Bool, addDirectionalLight {
+            let lightNode = SCNNode()
+            let light = SCNLight()
+            light.type = .directional
+            light.intensity = 1000 // Adjust brightness (default is 1000)
+            light.color = UIColor.white
+            light.castsShadow = false // Set to true if you want shadows
+            lightNode.light = light
+            lightNode.position = SCNVector3(0, 10, 10) // Position above and in front
+            lightNode.look(at: SCNVector3(0, 0, 0)) // Point towards origin
+            self.sceneView.scene.rootNode.addChildNode(lightNode)
+        }
+        
+        // Add ambient light (optional)
+        // This provides uniform lighting from all directions
+        if let addAmbientLight = arguments["addAmbientLight"] as? Bool, addAmbientLight {
+            let ambientLightNode = SCNNode()
+            let ambientLight = SCNLight()
+            ambientLight.type = .ambient
+            if let ambientIntensity = arguments["ambientLightIntensity"] as? Double {
+                ambientLight.intensity = CGFloat(ambientIntensity)
+            } else {
+                ambientLight.intensity = 300 // Default ambient intensity
+            }
+            ambientLight.color = UIColor.white
+            ambientLightNode.light = ambientLight
+            self.sceneView.scene.rootNode.addChildNode(ambientLightNode)
+        }
+        
+        // Configure automatic lighting updates
+        // ARKit automatically updates lighting based on camera input
+        // You can disable this if you want to use only manual lights
+        if let enableAutomaticLighting = arguments["enableAutomaticLighting"] as? Bool {
+            // ARKit's automatic lighting is always enabled when environmentTexturing is .automatic
+            // To disable automatic lighting, you would need to set environmentTexturing to .none
+            // and rely only on manual lights
+            if !enableAutomaticLighting {
+                self.configuration.environmentTexturing = .none
+            }
         }
     }
 }

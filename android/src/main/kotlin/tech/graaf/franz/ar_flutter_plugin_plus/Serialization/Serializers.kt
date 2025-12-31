@@ -1,20 +1,17 @@
 package tech.graaf.franz.ar_flutter_plugin_plus.Serialization
 
 import com.google.ar.core.*
-import com.google.ar.sceneform.AnchorNode
-import com.google.ar.sceneform.math.Matrix
-import com.google.ar.sceneform.math.Quaternion
-import com.google.ar.sceneform.math.Vector3
-import com.google.ar.sceneform.ux.BaseTransformableNode
-import com.google.ar.sceneform.ux.TransformableNode
+import dev.romainguy.kotlin.math.Float3
+import dev.romainguy.kotlin.math.Quaternion
+import io.github.sceneview.ar.node.AnchorNode
+import io.github.sceneview.node.Node
 
 fun serializeHitResult(hitResult: HitResult): HashMap<String, Any> {
-    val serializedHitResult = HashMap<String,Any>()
+    val serializedHitResult = HashMap<String, Any>()
 
     if (hitResult.trackable is Plane && (hitResult.trackable as Plane).isPoseInPolygon(hitResult.hitPose)) {
         serializedHitResult["type"] = 1 // Type plane
-    }
-    else if (hitResult.trackable is Point){
+    } else if (hitResult.trackable is Point) {
         serializedHitResult["type"] = 2 // Type point
     } else {
         serializedHitResult["type"] = 0 // Type undefined
@@ -37,20 +34,20 @@ fun serializePose(pose: Pose): DoubleArray {
     return serializedPoseDouble
 }
 
-fun serializePoseWithScale(pose: Pose, scale: Vector3): DoubleArray {
+fun serializePoseWithScale(pose: Pose, scale: Float3): DoubleArray {
     val serializedPose = FloatArray(16)
     pose.toMatrix(serializedPose, 0)
     // copy into double Array
     val serializedPoseDouble = DoubleArray(serializedPose.size)
     for (i in serializedPose.indices) {
         serializedPoseDouble[i] = serializedPose[i].toDouble()
-        if (i == 0 || i == 4 || i == 8){
+        if (i == 0 || i == 4 || i == 8) {
             serializedPoseDouble[i] = serializedPoseDouble[i] * scale.x
         }
-        if (i == 1 || i == 5 || i == 9){
+        if (i == 1 || i == 5 || i == 9) {
             serializedPoseDouble[i] = serializedPoseDouble[i] * scale.y
         }
-        if (i == 2 || i == 7 || i == 10){
+        if (i == 2 || i == 7 || i == 10) {
             serializedPoseDouble[i] = serializedPoseDouble[i] * scale.z
         }
     }
@@ -63,18 +60,25 @@ fun serializeAnchor(anchorNode: AnchorNode, anchor: Anchor?): HashMap<String, An
     serializedAnchor["name"] = anchorNode.name
     serializedAnchor["cloudanchorid"] = anchor?.cloudAnchorId
     serializedAnchor["transformation"] = if (anchor != null) serializePose(anchor.pose) else null
-    serializedAnchor["childNodes"] = anchorNode.children.map { child -> child.name }
+    serializedAnchor["childNodes"] = anchorNode.childNodes.map { child -> child.name }
 
     return serializedAnchor
 }
 
-fun serializeLocalTransformation(node: BaseTransformableNode): HashMap<String, Any>{
+fun serializeLocalTransformation(node: Node): HashMap<String, Any> {
     val serializedLocalTransformation = HashMap<String, Any>()
-    serializedLocalTransformation["name"] = node.name
+    serializedLocalTransformation["name"] = node.name ?: ""
 
-    val transform = Pose(floatArrayOf(node.localPosition.x, node.localPosition.y, node.localPosition.z), floatArrayOf(node.localRotation.x, node.localRotation.y, node.localRotation.z, node.localRotation.w))
+    val position = node.position
+    val rotation = node.quaternion
+    val scale = node.scale
 
-    serializedLocalTransformation["transform"] = serializePoseWithScale(transform, node.localScale)
+    val transform = Pose(
+        floatArrayOf(position.x, position.y, position.z),
+        floatArrayOf(rotation.x, rotation.y, rotation.z, rotation.w)
+    )
+
+    serializedLocalTransformation["transform"] = serializePoseWithScale(transform, scale)
 
     return serializedLocalTransformation
 }

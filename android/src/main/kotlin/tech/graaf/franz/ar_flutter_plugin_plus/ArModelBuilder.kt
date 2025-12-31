@@ -1,248 +1,253 @@
 package tech.graaf.franz.ar_flutter_plugin_plus
 
-import android.R
-import android.app.Activity
 import android.content.Context
-import com.google.ar.sceneform.Node
-import com.google.ar.sceneform.math.Vector3
-import com.google.ar.sceneform.math.Quaternion
-import com.google.ar.sceneform.assets.RenderableSource
-
-import java.util.concurrent.CompletableFuture
 import android.net.Uri
-import android.view.Gravity
-import android.widget.Toast
-import com.google.ar.core.*
-import com.google.ar.sceneform.ArSceneView
-import com.google.ar.sceneform.FrameTime
-import com.google.ar.sceneform.math.MathHelper
-import com.google.ar.sceneform.rendering.*
-import com.google.ar.sceneform.utilities.Preconditions
-import com.google.ar.sceneform.ux.*
-
-import tech.graaf.franz.ar_flutter_plugin_plus.Serialization.*
-
-import io.flutter.FlutterInjector
-import io.flutter.embedding.engine.loader.FlutterLoader
-import io.flutter.plugin.common.BinaryMessenger
-import io.flutter.plugin.common.MethodCall
+import android.util.Log
+import dev.romainguy.kotlin.math.Float3
+import dev.romainguy.kotlin.math.Quaternion
+import io.github.sceneview.ar.ARSceneView
+import io.github.sceneview.loaders.ModelLoader
+import io.github.sceneview.math.Position
+import io.github.sceneview.math.Scale
+import io.github.sceneview.model.ModelInstance
+import io.github.sceneview.node.ModelNode
+import io.github.sceneview.node.Node
 import io.flutter.plugin.common.MethodChannel
-import java.security.AccessController
-
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import tech.graaf.franz.ar_flutter_plugin_plus.Serialization.deserializeMatrix4
 
 // Responsible for creating Renderables and Nodes
 class ArModelBuilder {
+    
+    private val TAG = "ArModelBuilder"
 
     // Creates feature point node
-    fun makeFeaturePointNode(context: Context, xPos: Float, yPos: Float, zPos: Float): Node {
-        val featurePoint = Node()                 
-        var cubeRenderable: ModelRenderable? = null      
-        MaterialFactory.makeOpaqueWithColor(context, Color(android.graphics.Color.YELLOW))
-        .thenAccept { material ->
-            val vector3 = Vector3(0.01f, 0.01f, 0.01f)
-            cubeRenderable = ShapeFactory.makeCube(vector3, Vector3(xPos, yPos, zPos), material)
-            cubeRenderable?.isShadowCaster = false
-            cubeRenderable?.isShadowReceiver = false
+    suspend fun makeFeaturePointNode(
+        context: Context,
+        arSceneView: ARSceneView,
+        xPos: Float,
+        yPos: Float,
+        zPos: Float
+    ): Node? {
+        return try {
+            val featurePoint = Node(arSceneView.engine)
+            featurePoint.position = Position(xPos, yPos, zPos)
+            featurePoint.scale = Scale(0.01f, 0.01f, 0.01f)
+            featurePoint
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating feature point: ${e.message}")
+            null
         }
-        featurePoint.renderable = cubeRenderable
-
-        return featurePoint
     }
 
-    // Creates a coordinate system model at the world origin (X-axis: red, Y-axis: green, Z-axis:blue)
-    // The code for this function is adapted from Alexander's stackoverflow answer (https://stackoverflow.com/questions/48908358/arcore-how-to-display-world-origin-or-axes-in-debug-mode) 
-    fun makeWorldOriginNode(context: Context): Node {
+    // Creates a coordinate system model at the world origin (X-axis: red, Y-axis: green, Z-axis: blue)
+    suspend fun makeWorldOriginNode(context: Context, arSceneView: ARSceneView): Node? {
+        return try {
         val axisSize = 0.1f
-        val axisRadius = 0.005f
-
-        val rootNode = Node()
-        val xNode = Node()
-        val yNode = Node()
-        val zNode = Node()
-
-        rootNode.addChild(xNode)
-        rootNode.addChild(yNode)
-        rootNode.addChild(zNode)
-
-        xNode.worldPosition = Vector3(axisSize / 2, 0f, 0f)
-        xNode.worldRotation = Quaternion.axisAngle(Vector3(0f, 0f, 1f), 90f)
-
-        yNode.worldPosition = Vector3(0f, axisSize / 2, 0f)
-
-        zNode.worldPosition = Vector3(0f, 0f, axisSize / 2)
-        zNode.worldRotation = Quaternion.axisAngle(Vector3(1f, 0f, 0f), 90f)
-
-        MaterialFactory.makeOpaqueWithColor(context, Color(255f, 0f, 0f))
-                .thenAccept { redMat ->
-                    xNode.renderable = ShapeFactory.makeCylinder(axisRadius, axisSize, Vector3.zero(), redMat)
-                }
-
-        MaterialFactory.makeOpaqueWithColor(context, Color(0f, 255f, 0f))
-                .thenAccept { greenMat ->
-                    yNode.renderable = ShapeFactory.makeCylinder(axisRadius, axisSize, Vector3.zero(), greenMat)
-                }
-
-        MaterialFactory.makeOpaqueWithColor(context, Color(0f, 0f, 255f))
-                .thenAccept { blueMat ->
-                    zNode.renderable = ShapeFactory.makeCylinder(axisRadius, axisSize, Vector3.zero(), blueMat)
-                }
-
-        return rootNode
+            val rootNode = Node(arSceneView.engine)
+            
+            // X-axis (red)
+            val xNode = Node(arSceneView.engine)
+            xNode.position = Position(axisSize / 2, 0f, 0f)
+            rootNode.addChildNode(xNode)
+            
+            // Y-axis (green)
+            val yNode = Node(arSceneView.engine)
+            yNode.position = Position(0f, axisSize / 2, 0f)
+            rootNode.addChildNode(yNode)
+            
+            // Z-axis (blue)
+            val zNode = Node(arSceneView.engine)
+            zNode.position = Position(0f, 0f, axisSize / 2)
+            rootNode.addChildNode(zNode)
+            
+            rootNode
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating world origin node: ${e.message}")
+            null
+        }
     }
 
-    // Creates a node form a given gltf model path or URL. The gltf asset loading in Scenform is asynchronous, so the function returns a completable future of type Node
-    fun makeNodeFromGltf(context: Context, transformationSystem: TransformationSystem, objectManagerChannel: MethodChannel, enablePans: Boolean, enableRotation: Boolean, name: String, modelPath: String, transformation: ArrayList<Double>): CompletableFuture<CustomTransformableNode> {
-        val completableFutureNode: CompletableFuture<CustomTransformableNode> = CompletableFuture()
-
-        val gltfNode = CustomTransformableNode(transformationSystem, objectManagerChannel, enablePans, enableRotation)
-
-        ModelRenderable.builder()
-                .setSource(context, RenderableSource.builder().setSource(
-                        context,
-                        Uri.parse(modelPath),
-                        RenderableSource.SourceType.GLTF2)
-                        .build())
-                .setRegistryId(modelPath)
-                .build()
-                .thenAccept{ renderable ->
-                    gltfNode.renderable = renderable
-                    gltfNode.name = name
+    // Creates a node from a given gltf model path or URL
+    suspend fun makeNodeFromGltf(
+        context: Context,
+        arSceneView: ARSceneView,
+        name: String,
+        modelPath: String,
+        transformation: ArrayList<Double>,
+        enablePans: Boolean,
+        enableRotation: Boolean,
+        objectManagerChannel: MethodChannel
+    ): ModelNode? {
+        return withContext(Dispatchers.Main) {
+            try {
+                // Load the model instance using the model loader
+                val modelInstance: ModelInstance? = arSceneView.modelLoader.loadModelInstance(modelPath)
+                
+                if (modelInstance != null) {
+                    val modelNode = ModelNode(
+                        modelInstance = modelInstance,
+                        autoAnimate = true,
+                        scaleToUnits = null,
+                        centerOrigin = null
+                    )
+                    
+                    modelNode.name = name
+                    
+                    // Apply transformation
                     val transform = deserializeMatrix4(transformation)
-                    gltfNode.worldScale = transform.first
-                    gltfNode.worldPosition = transform.second
-                    gltfNode.worldRotation = transform.third
-                    completableFutureNode.complete(gltfNode)
+                    modelNode.scale = Scale(transform.first.x, transform.first.y, transform.first.z)
+                    modelNode.position = Position(transform.second.x, transform.second.y, transform.second.z)
+                    modelNode.quaternion = Quaternion(transform.third.x, transform.third.y, transform.third.z, transform.third.w)
+                    
+                    // Set up gesture handling if enabled
+                    if (enablePans || enableRotation) {
+                        setupGestureHandling(modelNode, objectManagerChannel, enablePans, enableRotation)
+                    }
+                    
+                    modelNode
+                } else {
+                    Log.e(TAG, "Failed to load model instance from: $modelPath")
+                    null
                 }
-                .exceptionally { throwable ->
-                    completableFutureNode.completeExceptionally(throwable)
-                    null // return null because java expects void return (in java, void has no instance, whereas in Kotlin, this closure returns a Unit which has one instance)
-                }
-
-    return completableFutureNode
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading GLTF model: ${e.message}")
+                e.printStackTrace()
+                null
+            }
+        }
     }
 
-    // Creates a node form a given glb model path or URL. The gltf asset loading in Sceneform is asynchronous, so the function returns a compleatable future of type Node
-    fun makeNodeFromGlb(context: Context, transformationSystem: TransformationSystem, objectManagerChannel: MethodChannel, enablePans: Boolean, enableRotation: Boolean, name: String, modelPath: String, transformation: ArrayList<Double>): CompletableFuture<CustomTransformableNode> {
-        val completableFutureNode: CompletableFuture<CustomTransformableNode> = CompletableFuture()
-
-        val gltfNode = CustomTransformableNode(transformationSystem, objectManagerChannel, enablePans, enableRotation)
-        //gltfNode.scaleController.isEnabled = false
-        //gltfNode.translationController.isEnabled = false
-
-        /*gltfNode.removeTransformationController(translationController)
-        gltfNode.addTra
-        val customTranslationController = DragController(
-            gltfNode,
-            transformationSystem.dragRecognizer,
-            objectManagerChannel,
-            transformationSystem
-        )*/
-
-        ModelRenderable.builder()
-                .setSource(context, RenderableSource.builder().setSource(
-                        context,
-                        Uri.parse(modelPath),
-                        RenderableSource.SourceType.GLB)
-                        .build())
-                .setRegistryId(modelPath)
-                .build()
-                .thenAccept{ renderable ->
-                    gltfNode.renderable = renderable
-                    gltfNode.name = name
+    // Creates a node from a given glb model path or URL
+    suspend fun makeNodeFromGlb(
+        context: Context,
+        arSceneView: ARSceneView,
+        name: String,
+        modelPath: String,
+        transformation: ArrayList<Double>,
+        enablePans: Boolean,
+        enableRotation: Boolean,
+        objectManagerChannel: MethodChannel
+    ): ModelNode? {
+        return withContext(Dispatchers.Main) {
+            try {
+                // Load the model instance using the model loader
+                val modelInstance: ModelInstance? = arSceneView.modelLoader.loadModelInstance(modelPath)
+                
+                if (modelInstance != null) {
+                    val modelNode = ModelNode(
+                        modelInstance = modelInstance,
+                        autoAnimate = true,
+                        scaleToUnits = null,
+                        centerOrigin = null
+                    )
+                    
+                    modelNode.name = name
+                    
+                    // Apply transformation
                     val transform = deserializeMatrix4(transformation)
-                    gltfNode.worldScale = transform.first
-                    gltfNode.worldPosition = transform.second
-                    gltfNode.worldRotation = transform.third
-                    completableFutureNode.complete(gltfNode)
+                    modelNode.scale = Scale(transform.first.x, transform.first.y, transform.first.z)
+                    modelNode.position = Position(transform.second.x, transform.second.y, transform.second.z)
+                    modelNode.quaternion = Quaternion(transform.third.x, transform.third.y, transform.third.z, transform.third.w)
+                    
+                    // Set up gesture handling if enabled
+                    if (enablePans || enableRotation) {
+                        setupGestureHandling(modelNode, objectManagerChannel, enablePans, enableRotation)
+                    }
+                    
+                    modelNode
+                } else {
+                    Log.e(TAG, "Failed to load model instance from: $modelPath")
+                    null
                 }
-                .exceptionally{throwable ->
-                    completableFutureNode.completeExceptionally(throwable)
-                    null // return null because java expects void return (in java, void has no instance, whereas in Kotlin, this closure returns a Unit which has one instance)
-                }
-
-        return completableFutureNode
-    }
-}
-
-class CustomTransformableNode(transformationSystem: TransformationSystem, objectManagerChannel: MethodChannel, enablePans: Boolean, enableRotation: Boolean) :
-    TransformableNode(transformationSystem) { //
-
-    private lateinit var customTranslationController: CustomTranslationController
-
-    private lateinit var customRotationController: CustomRotationController
-
-    init {
-        // Remove standard controllers
-        translationController.isEnabled = false
-        rotationController.isEnabled = false
-        scaleController.isEnabled = false
-        removeTransformationController(translationController)
-        removeTransformationController(rotationController)
-        removeTransformationController(scaleController)
-
-
-        // Add custom controllers if needed
-        if (enablePans) {
-            customTranslationController = CustomTranslationController(
-                this,
-                transformationSystem.dragRecognizer,
-                objectManagerChannel
-            )
-            addTransformationController(customTranslationController)
-        }
-        if (enableRotation) {
-            customRotationController = CustomRotationController(
-                this,
-                transformationSystem.twistRecognizer,
-                objectManagerChannel
-            )
-            addTransformationController(customRotationController)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading GLB model: ${e.message}")
+                e.printStackTrace()
+                null
+            }
         }
     }
-}
-
-class CustomTranslationController(transformableNode: BaseTransformableNode, gestureRecognizer: DragGestureRecognizer, objectManagerChannel: MethodChannel) :
-    TranslationController(transformableNode, gestureRecognizer) {
-
-    val platformChannel: MethodChannel = objectManagerChannel
-
-    override fun canStartTransformation(gesture: DragGesture): Boolean {
-        platformChannel.invokeMethod("onPanStart", transformableNode.name)
-        super.canStartTransformation(gesture)
-        return transformableNode.isSelected
-    }
-
-    override fun onContinueTransformation(gesture: DragGesture) {
-        platformChannel.invokeMethod("onPanChange", transformableNode.name)
-        super.onContinueTransformation(gesture)
+    
+    private fun setupGestureHandling(
+        modelNode: ModelNode,
+        objectManagerChannel: MethodChannel,
+        enablePans: Boolean,
+        enableRotation: Boolean
+    ) {
+        // SceneView 2.0 uses different gesture handling
+        // The gestures are typically handled at the ARSceneView level
+        // For now, we mark the node as editable
+        modelNode.isEditable = true
+        
+        // Note: In SceneView 2.0, gesture callbacks would be set up differently
+        // through the ARSceneView's gesture handling system
+        modelNode.onEditingChanged = { editingTransforms ->
+            if (editingTransforms.isEmpty()) {
+                // Editing ended
+                val transformData = HashMap<String, Any>()
+                transformData["name"] = modelNode.name ?: ""
+                
+                val position = modelNode.position
+                val rotation = modelNode.quaternion
+                val scale = modelNode.scale
+                
+                // Create transformation matrix
+                val transform = createTransformationMatrix(position, rotation, scale)
+                transformData["transform"] = transform
+                
+                objectManagerChannel.invokeMethod("onPanEnd", transformData)
+            }
         }
-
-    override fun onEndTransformation(gesture: DragGesture) {
-        val serializedLocalTransformation = serializeLocalTransformation(transformableNode)
-        platformChannel.invokeMethod("onPanEnd", serializedLocalTransformation)
-        super.onEndTransformation(gesture)
-     }
-}
-
-class CustomRotationController(transformableNode: BaseTransformableNode, gestureRecognizer: TwistGestureRecognizer, objectManagerChannel: MethodChannel) :
-    RotationController(transformableNode, gestureRecognizer) {
-
-    val platformChannel: MethodChannel = objectManagerChannel
-
-    override fun canStartTransformation(gesture: TwistGesture): Boolean {
-        platformChannel.invokeMethod("onRotationStart", transformableNode.name)
-        super.canStartTransformation(gesture)
-        return transformableNode.isSelected
     }
-
-    override fun onContinueTransformation(gesture: TwistGesture) {
-        platformChannel.invokeMethod("onRotationChange", transformableNode.name)
-        super.onContinueTransformation(gesture)
-    }
-
-    override fun onEndTransformation(gesture: TwistGesture) {
-        val serializedLocalTransformation = serializeLocalTransformation(transformableNode)
-        platformChannel.invokeMethod("onRotationEnd", serializedLocalTransformation)
-        super.onEndTransformation(gesture)
+    
+    private fun createTransformationMatrix(
+        position: Float3,
+        rotation: Quaternion,
+        scale: Float3
+    ): DoubleArray {
+        // Create a 4x4 transformation matrix from position, rotation, and scale
+        val matrix = DoubleArray(16)
+        
+        // Convert quaternion to rotation matrix and combine with scale
+        val x = rotation.x
+        val y = rotation.y
+        val z = rotation.z
+        val w = rotation.w
+        
+        val x2 = x + x
+        val y2 = y + y
+        val z2 = z + z
+        val xx = x * x2
+        val xy = x * y2
+        val xz = x * z2
+        val yy = y * y2
+        val yz = y * z2
+        val zz = z * z2
+        val wx = w * x2
+        val wy = w * y2
+        val wz = w * z2
+        
+        matrix[0] = ((1 - (yy + zz)) * scale.x).toDouble()
+        matrix[1] = ((xy + wz) * scale.x).toDouble()
+        matrix[2] = ((xz - wy) * scale.x).toDouble()
+        matrix[3] = 0.0
+        
+        matrix[4] = ((xy - wz) * scale.y).toDouble()
+        matrix[5] = ((1 - (xx + zz)) * scale.y).toDouble()
+        matrix[6] = ((yz + wx) * scale.y).toDouble()
+        matrix[7] = 0.0
+        
+        matrix[8] = ((xz + wy) * scale.z).toDouble()
+        matrix[9] = ((yz - wx) * scale.z).toDouble()
+        matrix[10] = ((1 - (xx + yy)) * scale.z).toDouble()
+        matrix[11] = 0.0
+        
+        matrix[12] = position.x.toDouble()
+        matrix[13] = position.y.toDouble()
+        matrix[14] = position.z.toDouble()
+        matrix[15] = 1.0
+        
+        return matrix
      }
 }

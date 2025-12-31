@@ -669,9 +669,12 @@ internal class AndroidARView(
         val node = nodesByName[name]
         node?.let {
             val transformTriple = deserializeMatrix4(transform)
+            // Note: scale here updates the node's scale property
+            // This works relative to the initial scaleToUnits set during creation
             it.scale = Scale(transformTriple.first.x, transformTriple.first.y, transformTriple.first.z)
             it.position = Position(transformTriple.second.x, transformTriple.second.y, transformTriple.second.z)
             it.quaternion = MathQuaternion(transformTriple.third.x, transformTriple.third.y, transformTriple.third.z, transformTriple.third.w)
+            Log.d(TAG, "Transformed node $name - scale: ${it.scale}, position: ${it.position}")
         }
     }
 
@@ -679,17 +682,69 @@ internal class AndroidARView(
         val frame = currentFrame
         
         if (motionEvent.action == MotionEvent.ACTION_DOWN) {
+            val x = motionEvent.x
+            val y = motionEvent.y
+            
+            // First check if a node was tapped using SceneView's picking
+            val tappedNode = pickNodeAtScreenPosition(x, y)
+            if (tappedNode != null) {
+                val nodeName = tappedNode.name
+                if (nodeName != null && nodesByName.containsKey(nodeName)) {
+                    Log.d(TAG, "Node tapped: $nodeName")
+                    objectManagerChannel.invokeMethod("onNodeTap", listOf(nodeName))
+                    return true
+                }
+            }
+            
             // Handle plane/point tap using ARCore hit test
-                val allHitResults = frame?.hitTest(motionEvent) ?: listOf<HitResult>()
+            val allHitResults = frame?.hitTest(motionEvent) ?: listOf<HitResult>()
             val planeAndPointHitResults = allHitResults.filter { 
                 (it.trackable is Plane) || (it.trackable is Point) 
             }
-                val serializedPlaneAndPointHitResults: ArrayList<HashMap<String, Any>> =
+            val serializedPlaneAndPointHitResults: ArrayList<HashMap<String, Any>> =
                     ArrayList(planeAndPointHitResults.map { serializeHitResult(it) })
             sessionManagerChannel.invokeMethod("onPlaneOrPointTap", serializedPlaneAndPointHitResults)
-                return true
+            return true
         }
         return false
+    }
+    
+    /**
+     * Pick a node at the given screen coordinates
+     * Uses ARCore hit testing and checks against our tracked nodes
+     */
+    private fun pickNodeAtScreenPosition(x: Float, y: Float): io.github.sceneview.node.Node? {
+        val frame = currentFrame ?: return null
+        
+        // Create hit test from screen position
+        val hitResults = frame.hitTest(x, y)
+        
+        // Check if any hit result corresponds to a tracked node
+        for (hitResult in hitResults) {
+            val trackable = hitResult.trackable
+            val hitPose = hitResult.hitPose
+            
+            // Check each model node for proximity to the hit point
+            for ((name, node) in nodesByName) {
+                val nodePos = node.worldPosition
+                val hitPos = hitPose.translation
+                
+                // Calculate distance between hit point and node center
+                val dx = nodePos.x - hitPos[0]
+                val dy = nodePos.y - hitPos[1]
+                val dz = nodePos.z - hitPos[2]
+                val distance = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+                
+                // If hit is close to the node (within reasonable threshold)
+                // The threshold depends on the model size, using 0.2m as default
+                if (distance < 0.3f) {
+                    Log.d(TAG, "Hit near node: $name (distance: $distance)")
+                    return node
+                }
+            }
+        }
+        
+        return null
     }
 
     private fun addPlaneAnchor(transform: ArrayList<Double>, name: String): Boolean {

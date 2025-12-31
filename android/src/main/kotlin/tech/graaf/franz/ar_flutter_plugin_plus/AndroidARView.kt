@@ -14,6 +14,9 @@ import android.view.MotionEvent
 import android.view.PixelCopy
 import android.view.View
 import android.widget.Toast
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import com.google.ar.core.*
 import com.google.ar.core.exceptions.*
 import dev.romainguy.kotlin.math.Float3
@@ -47,9 +50,13 @@ internal class AndroidARView(
         messenger: BinaryMessenger,
         id: Int,
         creationParams: Map<String?, Any?>?
-) : PlatformView {
+) : PlatformView, LifecycleOwner {
     // constants
     private val TAG: String = AndroidARView::class.java.name
+    
+    // Lifecycle management for SceneView
+    private val lifecycleRegistry: LifecycleRegistry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
     
     // Lifecycle variables
     private var mUserRequestedInstall = true
@@ -266,9 +273,19 @@ internal class AndroidARView(
     override fun dispose() {
         Log.d(TAG, "dispose called")
         try {
+            // Cancel coroutines
             coroutineScope.cancel()
+            
+            // Unregister lifecycle callbacks
+            activity.application.unregisterActivityLifecycleCallbacks(activityLifecycleCallbacks)
+            
+            // Move lifecycle to DESTROYED state
+            lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
+            
+            // Destroy the ARSceneView
             arSceneView.destroy()
         } catch (e: Exception) {
+            Log.e(TAG, "Error during dispose: ${e.message}")
             e.printStackTrace()
         }
     }
@@ -277,7 +294,17 @@ internal class AndroidARView(
         Log.d(TAG, "Initializing AndroidARView")
         viewContext = context
 
-        arSceneView = ARSceneView(context)
+        // Initialize lifecycle to CREATED state
+        lifecycleRegistry.currentState = Lifecycle.State.CREATED
+        
+        // Create ARSceneView with lifecycle owner
+        arSceneView = ARSceneView(
+            context = context,
+            attrs = null,
+            defStyleAttr = 0,
+            defStyleRes = 0,
+            sharedLifecycle = lifecycle
+        )
 
         setupLifeCycle(context)
 
@@ -285,6 +312,9 @@ internal class AndroidARView(
         objectManagerChannel.setMethodCallHandler(onObjectMethodCall)
         anchorManagerChannel.setMethodCallHandler(onAnchorMethodCall)
 
+        // Move to STARTED state
+        lifecycleRegistry.currentState = Lifecycle.State.STARTED
+        
         onResume()
     }
 
@@ -325,9 +355,10 @@ internal class AndroidARView(
     }
 
     fun onResume() {
-        // SceneView handles session creation internally
+        Log.d(TAG, "onResume called")
+        
         // Check if ARCore is available and installed
-            try {
+        try {
                 if (ArCoreApk.getInstance().requestInstall(activity, mUserRequestedInstall) ==
                         ArCoreApk.InstallStatus.INSTALL_REQUESTED) {
                     Log.d(TAG, "Install of ArCore APK requested")
@@ -351,12 +382,29 @@ internal class AndroidARView(
                 return
             } catch (e: Exception) {
                 Toast.makeText(activity, "Failed to create AR session", Toast.LENGTH_LONG).show()
-            return
+                return
+        }
+        
+        // Move lifecycle to RESUMED state to start the camera
+        try {
+            lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+            Log.d(TAG, "Lifecycle moved to RESUMED")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error resuming lifecycle: ${e.message}")
         }
     }
 
     fun onPause() {
-        // SceneView handles pause internally
+        Log.d(TAG, "onPause called")
+        try {
+            // Move lifecycle back to STARTED state (pauses camera)
+            if (lifecycleRegistry.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                lifecycleRegistry.currentState = Lifecycle.State.STARTED
+                Log.d(TAG, "Lifecycle moved to STARTED (paused)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pausing lifecycle: ${e.message}")
+        }
     }
 
     private fun takeSnapshot(result: MethodChannel.Result) {

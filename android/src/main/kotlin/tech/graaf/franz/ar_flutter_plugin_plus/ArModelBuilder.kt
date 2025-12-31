@@ -10,6 +10,7 @@ import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Scale
 import io.github.sceneview.model.ModelInstance
+import io.github.sceneview.node.CubeNode
 import io.github.sceneview.node.ModelNode
 import io.github.sceneview.node.Node
 import io.flutter.plugin.common.MethodChannel
@@ -22,7 +23,7 @@ class ArModelBuilder {
     
     private val TAG = "ArModelBuilder"
 
-    // Creates feature point node
+    // Creates feature point node using CubeNode
     suspend fun makeFeaturePointNode(
         context: Context,
         arSceneView: ARSceneView,
@@ -30,42 +31,65 @@ class ArModelBuilder {
         yPos: Float,
         zPos: Float
     ): Node? {
-        return try {
-            val featurePoint = Node(arSceneView.engine)
-            featurePoint.position = Position(xPos, yPos, zPos)
-            featurePoint.scale = Scale(0.01f, 0.01f, 0.01f)
-            featurePoint
-        } catch (e: Exception) {
-            Log.e(TAG, "Error creating feature point: ${e.message}")
-            null
+        return withContext(Dispatchers.Main) {
+            try {
+                // Create a small cube for the feature point
+                val cubeNode = CubeNode(
+                    engine = arSceneView.engine,
+                    size = Float3(0.005f, 0.005f, 0.005f), // 5mm cube
+                    center = Float3(0f, 0f, 0f)
+                )
+                cubeNode.worldPosition = Float3(xPos, yPos, zPos)
+                cubeNode
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating feature point: ${e.message}")
+                e.printStackTrace()
+                // Fallback to simple node without geometry
+                val featurePoint = Node(arSceneView.engine)
+                featurePoint.worldPosition = Float3(xPos, yPos, zPos)
+                featurePoint
+            }
         }
     }
 
     // Creates a coordinate system model at the world origin (X-axis: red, Y-axis: green, Z-axis: blue)
     suspend fun makeWorldOriginNode(context: Context, arSceneView: ARSceneView): Node? {
-        return try {
-        val axisSize = 0.1f
-            val rootNode = Node(arSceneView.engine)
-            
-            // X-axis (red)
-            val xNode = Node(arSceneView.engine)
-            xNode.position = Position(axisSize / 2, 0f, 0f)
-            rootNode.addChildNode(xNode)
-            
-            // Y-axis (green)
-            val yNode = Node(arSceneView.engine)
-            yNode.position = Position(0f, axisSize / 2, 0f)
-            rootNode.addChildNode(yNode)
-            
-            // Z-axis (blue)
-            val zNode = Node(arSceneView.engine)
-            zNode.position = Position(0f, 0f, axisSize / 2)
-            rootNode.addChildNode(zNode)
-            
-            rootNode
-        } catch (e: Exception) {
-            Log.e(TAG, "Error creating world origin node: ${e.message}")
-            null
+        return withContext(Dispatchers.Main) {
+            try {
+                val axisSize = 0.1f
+                val axisThickness = 0.005f
+                val rootNode = Node(arSceneView.engine)
+                
+                // X-axis (red) - elongated box along X
+                val xNode = CubeNode(
+                    engine = arSceneView.engine,
+                    size = Float3(axisSize, axisThickness, axisThickness),
+                    center = Float3(axisSize / 2, 0f, 0f)
+                )
+                rootNode.addChildNode(xNode)
+                
+                // Y-axis (green) - elongated box along Y
+                val yNode = CubeNode(
+                    engine = arSceneView.engine,
+                    size = Float3(axisThickness, axisSize, axisThickness),
+                    center = Float3(0f, axisSize / 2, 0f)
+                )
+                rootNode.addChildNode(yNode)
+                
+                // Z-axis (blue) - elongated box along Z
+                val zNode = CubeNode(
+                    engine = arSceneView.engine,
+                    size = Float3(axisThickness, axisThickness, axisSize),
+                    center = Float3(0f, 0f, axisSize / 2)
+                )
+                rootNode.addChildNode(zNode)
+                
+                rootNode
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating world origin node: ${e.message}")
+                e.printStackTrace()
+                null
+            }
         }
     }
 

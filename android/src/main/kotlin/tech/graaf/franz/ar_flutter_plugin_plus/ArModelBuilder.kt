@@ -177,22 +177,35 @@ class ArModelBuilder {
                 if (modelInstance != null) {
                     Log.d(TAG, "Model instance loaded successfully: $name")
                     
+                    // Apply transformation
+                    val transform = deserializeMatrix4(transformation)
+                    
+                    // Log transformation details for debugging
+                    Log.d(TAG, "Raw transformation scale: x=${transform.first.x}, y=${transform.first.y}, z=${transform.first.z}")
+                    Log.d(TAG, "Raw transformation position: x=${transform.second.x}, y=${transform.second.y}, z=${transform.second.z}")
+                    Log.d(TAG, "Raw transformation rotation: x=${transform.third.x}, y=${transform.third.y}, z=${transform.third.z}, w=${transform.third.w}")
+                    
+                    // Use scaleToUnits to normalize the model to the user-specified scale
+                    // This makes models work the same way as they did in Sceneform
+                    // The scale from the transformation matrix represents the desired size in meters
+                    val userScale = transform.first.x  // Assuming uniform scale
+                    
                     val modelNode = ModelNode(
                         modelInstance = modelInstance,
                         autoAnimate = true,
-                        scaleToUnits = null,
+                        // scaleToUnits normalizes the model to fit within a cube of this size
+                        // Setting it to the user's scale makes the model that size
+                        scaleToUnits = userScale,
                         centerOrigin = null
                     )
                     
                     modelNode.name = name
                     
-                    // Apply transformation
-                    val transform = deserializeMatrix4(transformation)
-                    modelNode.scale = Scale(transform.first.x, transform.first.y, transform.first.z)
+                    // Apply position and rotation (scale is handled by scaleToUnits)
                     modelNode.position = Position(transform.second.x, transform.second.y, transform.second.z)
                     modelNode.quaternion = Quaternion(transform.third.x, transform.third.y, transform.third.z, transform.third.w)
                     
-                    Log.d(TAG, "Model node created - scale: ${transform.first}, position: ${transform.second}")
+                    Log.d(TAG, "Applied to node - scaleToUnits: $userScale, position: ${modelNode.position}")
                     
                     // Set up gesture handling if enabled
                     if (enablePans || enableRotation) {

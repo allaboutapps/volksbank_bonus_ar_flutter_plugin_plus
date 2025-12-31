@@ -47,7 +47,7 @@ dependencies {
     
     // SceneView 2.0+ - 16KB page size compatible (replaces deprecated Sceneform)
     // This includes Filament rendering engine with 16KB support
-    implementation("io.github.sceneview:arsceneview:2.2.1")
+    implementation("io.github.sceneview:arsceneview:2.3.0")
 
     // AndroidX + Play Services
     implementation("androidx.appcompat:appcompat:1.7.0")

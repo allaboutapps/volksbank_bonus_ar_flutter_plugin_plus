@@ -305,6 +305,21 @@ internal class AndroidARView(
             defStyleRes = 0,
             sharedLifecycle = lifecycle
         )
+        
+        // Set default session configuration (will be updated in initializeARView)
+        // This must be set BEFORE the session starts
+        arSceneView.configureSession { session, config ->
+            Log.d(TAG, "Default session configuration applied")
+            config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
+            config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+            config.focusMode = Config.FocusMode.AUTO
+        }
+        
+        // Set default frame update listener
+        arSceneView.onSessionUpdated = { session, frame ->
+            currentFrame = frame
+            onFrame(frame)
+        }
 
         setupLifeCycle(context)
 
@@ -434,6 +449,8 @@ internal class AndroidARView(
     }
 
     private fun initializeARView(call: MethodCall, result: MethodChannel.Result) {
+        Log.d(TAG, "initializeARView called")
+        
         // Unpack call arguments
         val argShowFeaturePoints: Boolean? = call.argument<Boolean>("showFeaturePoints")
         val argPlaneDetectionConfig: Int? = call.argument<Int>("planeDetectionConfig")
@@ -449,12 +466,6 @@ internal class AndroidARView(
         // Configure feature points
         showFeaturePoints = argShowFeaturePoints == true
 
-        // Set up frame update listener
-        arSceneView.onSessionUpdated = { session, frame ->
-            currentFrame = frame
-            onFrame(frame)
-        }
-
         // Configure tap handling  
         if (argHandleTaps == true) {
             arSceneView.setOnTouchListener { _, motionEvent ->
@@ -466,26 +477,55 @@ internal class AndroidARView(
         enableRotation = argHandleRotation == true
         enablePans = argHandlePans == true
 
-        // Configure plane detection
-        arSceneView.configureSession { session, config ->
-        when (argPlaneDetectionConfig) {
-                1 -> config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
-                2 -> config.planeFindingMode = Config.PlaneFindingMode.VERTICAL
-                3 -> config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
-                else -> config.planeFindingMode = Config.PlaneFindingMode.DISABLED
+        // Reconfigure the session at runtime (since session is already created)
+        val session = arSceneView.session
+        if (session != null) {
+            try {
+                val config = Config(session)
+                
+                // Configure plane detection
+                when (argPlaneDetectionConfig) {
+                    1 -> {
+                        config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
+                        Log.d(TAG, "Plane detection: HORIZONTAL")
+                    }
+                    2 -> {
+                        config.planeFindingMode = Config.PlaneFindingMode.VERTICAL
+                        Log.d(TAG, "Plane detection: VERTICAL")
+                    }
+                    3 -> {
+                        config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
+                        Log.d(TAG, "Plane detection: HORIZONTAL_AND_VERTICAL")
+                    }
+                    else -> {
+                        config.planeFindingMode = Config.PlaneFindingMode.DISABLED
+                        Log.d(TAG, "Plane detection: DISABLED")
+                    }
+                }
+                
+                config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+                config.focusMode = Config.FocusMode.AUTO
+                
+                // Configure image tracking
+                argTrackingImagePaths?.let { imagePaths ->
+                    setupImageTracking(session, config, imagePaths)
+                }
+                
+                // Apply the configuration
+                session.configure(config)
+                Log.d(TAG, "Session reconfigured successfully")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reconfiguring session: ${e.message}")
+                sessionManagerChannel.invokeMethod("onError", listOf("Error configuring AR session: ${e.message}"))
             }
-            
-            config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
-            config.focusMode = Config.FocusMode.AUTO
-
-        // Configure image tracking
-        argTrackingImagePaths?.let { imagePaths ->
-                setupImageTracking(session, config, imagePaths)
-            }
+        } else {
+            Log.w(TAG, "Session is null, will use default configuration")
         }
 
         // Configure whether or not detected planes should be shown
         arSceneView.planeRenderer.isVisible = argShowPlanes == true
+        Log.d(TAG, "Plane renderer visible: ${argShowPlanes == true}")
 
         // Configure world origin
         if (argShowWorldOrigin == true) {

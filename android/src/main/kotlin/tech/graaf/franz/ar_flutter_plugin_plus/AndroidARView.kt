@@ -464,7 +464,12 @@ internal class AndroidARView(
         val argTrackingImagePaths: List<String>? = call.argument<List<String>>("trackingImagePaths")
 
         // Configure feature points
+        // Note: Feature point visualization is currently not fully supported in SceneView 2.x
+        // The nodes are created but don't have visible geometry (Sceneform's ShapeFactory is not available)
         showFeaturePoints = argShowFeaturePoints == true
+        if (showFeaturePoints) {
+            Log.w(TAG, "Feature points visualization is limited in SceneView 2.x - nodes created but may not be visible")
+        }
 
         // Configure tap handling  
         if (argHandleTaps == true) {

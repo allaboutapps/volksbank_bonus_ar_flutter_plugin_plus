@@ -104,43 +104,7 @@ class ArModelBuilder {
         enableRotation: Boolean,
         objectManagerChannel: MethodChannel
     ): ModelNode? {
-        return withContext(Dispatchers.Main) {
-            try {
-                // Load the model instance using the model loader
-                val modelInstance: ModelInstance? = arSceneView.modelLoader.loadModelInstance(modelPath)
-                
-                if (modelInstance != null) {
-                    val modelNode = ModelNode(
-                        modelInstance = modelInstance,
-                        autoAnimate = true,
-                        scaleToUnits = null,
-                        centerOrigin = null
-                    )
-                    
-                    modelNode.name = name
-                    
-                    // Apply transformation
-                    val transform = deserializeMatrix4(transformation)
-                    modelNode.scale = Scale(transform.first.x, transform.first.y, transform.first.z)
-                    modelNode.position = Position(transform.second.x, transform.second.y, transform.second.z)
-                    modelNode.quaternion = Quaternion(transform.third.x, transform.third.y, transform.third.z, transform.third.w)
-                    
-                    // Set up gesture handling if enabled
-                    if (enablePans || enableRotation) {
-                        setupGestureHandling(modelNode, objectManagerChannel, enablePans, enableRotation)
-                    }
-                    
-                    modelNode
-                } else {
-                    Log.e(TAG, "Failed to load model instance from: $modelPath")
-                    null
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading GLTF model: ${e.message}")
-                e.printStackTrace()
-                null
-            }
-        }
+        return loadModelNode(context, arSceneView, name, modelPath, transformation, enablePans, enableRotation, objectManagerChannel)
     }
 
     // Creates a node from a given glb model path or URL
@@ -154,12 +118,65 @@ class ArModelBuilder {
         enableRotation: Boolean,
         objectManagerChannel: MethodChannel
     ): ModelNode? {
+        return loadModelNode(context, arSceneView, name, modelPath, transformation, enablePans, enableRotation, objectManagerChannel)
+    }
+    
+    // Unified model loading for both GLB and GLTF
+    private suspend fun loadModelNode(
+        context: Context,
+        arSceneView: ARSceneView,
+        name: String,
+        modelPath: String,
+        transformation: ArrayList<Double>,
+        enablePans: Boolean,
+        enableRotation: Boolean,
+        objectManagerChannel: MethodChannel
+    ): ModelNode? {
         return withContext(Dispatchers.Main) {
             try {
-                // Load the model instance using the model loader
-                val modelInstance: ModelInstance? = arSceneView.modelLoader.loadModelInstance(modelPath)
+                Log.d(TAG, "Loading model from: $modelPath")
+                
+                val modelInstance: ModelInstance? = when {
+                    // HTTP/HTTPS URL - load directly
+                    modelPath.startsWith("http://") || modelPath.startsWith("https://") -> {
+                        Log.d(TAG, "Loading from URL: $modelPath")
+                        arSceneView.modelLoader.loadModelInstance(modelPath)
+                    }
+                    // Absolute file path - use file:// URI
+                    modelPath.startsWith("/") -> {
+                        Log.d(TAG, "Loading from file system: $modelPath")
+                        arSceneView.modelLoader.loadModelInstance("file://$modelPath")
+                    }
+                    // Flutter asset path (e.g., "flutter_assets/Models/model.glb")
+                    // Load via Android assets using buffer and createModelInstance
+                    else -> {
+                        Log.d(TAG, "Loading from Flutter assets: $modelPath")
+                        try {
+                            // Read the asset file into a ByteBuffer
+                            val assetManager = context.assets
+                            val inputStream = assetManager.open(modelPath)
+                            val bytes = inputStream.readBytes()
+                            inputStream.close()
+                            
+                            val buffer = java.nio.ByteBuffer.allocateDirect(bytes.size)
+                            buffer.put(bytes)
+                            buffer.rewind()
+                            
+                            Log.d(TAG, "Asset loaded, size: ${bytes.size} bytes")
+                            
+                            // Create model instance from buffer using createModelInstance
+                            arSceneView.modelLoader.createModelInstance(buffer)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to load asset: ${e.message}, trying direct path")
+                            // Fallback: try loading directly (might work for some path formats)
+                            arSceneView.modelLoader.loadModelInstance(modelPath)
+                        }
+                    }
+                }
                 
                 if (modelInstance != null) {
+                    Log.d(TAG, "Model instance loaded successfully: $name")
+                    
                     val modelNode = ModelNode(
                         modelInstance = modelInstance,
                         autoAnimate = true,
@@ -175,6 +192,8 @@ class ArModelBuilder {
                     modelNode.position = Position(transform.second.x, transform.second.y, transform.second.z)
                     modelNode.quaternion = Quaternion(transform.third.x, transform.third.y, transform.third.z, transform.third.w)
                     
+                    Log.d(TAG, "Model node created - scale: ${transform.first}, position: ${transform.second}")
+                    
                     // Set up gesture handling if enabled
                     if (enablePans || enableRotation) {
                         setupGestureHandling(modelNode, objectManagerChannel, enablePans, enableRotation)
@@ -186,7 +205,7 @@ class ArModelBuilder {
                     null
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading GLB model: ${e.message}")
+                Log.e(TAG, "Error loading model: ${e.message}")
                 e.printStackTrace()
                 null
             }

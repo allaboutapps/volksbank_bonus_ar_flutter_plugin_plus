@@ -313,12 +313,25 @@ internal class AndroidARView(
             config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
             config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
             config.focusMode = Config.FocusMode.AUTO
+            // Enable light estimation for realistic lighting on 3D models
+            config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
         }
         
         // Set default frame update listener
         arSceneView.onSessionUpdated = { session, frame ->
             currentFrame = frame
             onFrame(frame)
+        }
+        
+        // Configure environment/lighting for proper model rendering
+        // In SceneView 2.x with AR, light estimation should handle this automatically
+        // But we can also manually set indirect light intensity
+        try {
+            // The ARSceneView should use light estimation from ARCore
+            // Models should be lit based on the ENVIRONMENTAL_HDR config set above
+            Log.d(TAG, "Light estimation mode set to ENVIRONMENTAL_HDR")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to configure lighting: ${e.message}")
         }
 
         setupLifeCycle(context)
@@ -511,6 +524,10 @@ internal class AndroidARView(
                 config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
                 config.focusMode = Config.FocusMode.AUTO
                 
+                // Enable light estimation for proper 3D model lighting
+                config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
+                Log.d(TAG, "Light estimation: ENVIRONMENTAL_HDR")
+                
                 // Configure image tracking
                 argTrackingImagePaths?.let { imagePaths ->
                     setupImageTracking(session, config, imagePaths)
@@ -518,7 +535,7 @@ internal class AndroidARView(
                 
                 // Apply the configuration
                 session.configure(config)
-                Log.d(TAG, "Session reconfigured successfully")
+                Log.d(TAG, "Session reconfigured successfully with light estimation")
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Error reconfiguring session: ${e.message}")

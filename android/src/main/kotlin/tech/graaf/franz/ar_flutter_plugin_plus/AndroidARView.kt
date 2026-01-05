@@ -324,14 +324,35 @@ internal class AndroidARView(
         }
         
         // Configure environment/lighting for proper model rendering
-        // In SceneView 2.x with AR, light estimation should handle this automatically
-        // But we can also manually set indirect light intensity
-        try {
-            // The ARSceneView should use light estimation from ARCore
-            // Models should be lit based on the ENVIRONMENTAL_HDR config set above
-            Log.d(TAG, "Light estimation mode set to ENVIRONMENTAL_HDR")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to configure lighting: ${e.message}")
+        // Similar to iOS: environmental lighting + ambient light for fill
+        coroutineScope.launch {
+            try {
+                val engine = arSceneView.engine
+                val entityManager = com.google.android.filament.EntityManager.get()
+                
+                // Add an ambient/indirect light to boost overall brightness
+                // This matches iOS behavior: addAmbientLight with intensity ~200
+                // In Filament, we use an indirect light or boost via IBL
+                // For now, add a soft directional light from above/front as fill
+                @com.google.android.filament.Entity
+                val fillLightEntity = entityManager.create()
+                
+                // Directional fill light from above and in front
+                // Similar to iOS: position (0, 10, 10) looking at origin
+                com.google.android.filament.LightManager.Builder(com.google.android.filament.LightManager.Type.DIRECTIONAL)
+                    .color(1.0f, 1.0f, 1.0f)  // White light
+                    .intensity(50000f)  // Moderate intensity (iOS uses intensity 200 for ambient)
+                    .direction(0f, -0.7f, -0.7f)  // From above and in front (normalized)
+                    .castShadows(false)  // No extra shadows
+                    .build(engine, fillLightEntity)
+                
+                arSceneView.scene.addEntity(fillLightEntity)
+                Log.d(TAG, "Fill light added (similar to iOS ambient) with intensity 50000 lux")
+                
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to configure fill light: ${e.message}")
+                e.printStackTrace()
+            }
         }
 
         setupLifeCycle(context)
@@ -411,7 +432,7 @@ internal class AndroidARView(
             } catch (e: Exception) {
                 Toast.makeText(activity, "Failed to create AR session", Toast.LENGTH_LONG).show()
                 return
-        }
+            }
         
         // Move lifecycle to RESUMED state to start the camera
         try {
@@ -432,7 +453,7 @@ internal class AndroidARView(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error pausing lifecycle: ${e.message}")
-        }
+    }
     }
 
     private fun takeSnapshot(result: MethodChannel.Result) {
@@ -500,26 +521,26 @@ internal class AndroidARView(
         if (session != null) {
             try {
                 val config = Config(session)
-                
-                // Configure plane detection
-                when (argPlaneDetectionConfig) {
-                    1 -> {
+
+        // Configure plane detection
+        when (argPlaneDetectionConfig) {
+            1 -> {
                         config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
                         Log.d(TAG, "Plane detection: HORIZONTAL")
-                    }
-                    2 -> {
+            }
+            2 -> {
                         config.planeFindingMode = Config.PlaneFindingMode.VERTICAL
                         Log.d(TAG, "Plane detection: VERTICAL")
-                    }
-                    3 -> {
+            }
+            3 -> {
                         config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
                         Log.d(TAG, "Plane detection: HORIZONTAL_AND_VERTICAL")
-                    }
-                    else -> {
+            }
+            else -> {
                         config.planeFindingMode = Config.PlaneFindingMode.DISABLED
                         Log.d(TAG, "Plane detection: DISABLED")
-                    }
-                }
+            }
+        }
                 
                 config.updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
                 config.focusMode = Config.FocusMode.AUTO
@@ -527,12 +548,12 @@ internal class AndroidARView(
                 // Enable light estimation for proper 3D model lighting
                 config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
                 Log.d(TAG, "Light estimation: ENVIRONMENTAL_HDR")
-                
-                // Configure image tracking
-                argTrackingImagePaths?.let { imagePaths ->
+
+        // Configure image tracking
+        argTrackingImagePaths?.let { imagePaths ->
                     setupImageTracking(session, config, imagePaths)
-                }
-                
+        }
+
                 // Apply the configuration
                 session.configure(config)
                 Log.d(TAG, "Session reconfigured successfully with light estimation")
@@ -543,7 +564,7 @@ internal class AndroidARView(
             }
         } else {
             Log.w(TAG, "Session is null, will use default configuration")
-        }
+                        }
 
         // Configure whether or not detected planes should be shown
         arSceneView.planeRenderer.isVisible = argShowPlanes == true
@@ -583,8 +604,8 @@ internal class AndroidARView(
                         featurePoint?.let {
                             arSceneView.addChildNode(it)
                             pointCloudNodes.add(it)
-                        }
-                    }
+                }
+            }
                 }
             }
             pointCloud.release()
@@ -625,7 +646,7 @@ internal class AndroidARView(
                     val documentsPath = viewContext.applicationInfo.dataDir
                     val assetPath = "$documentsPath/app_flutter/$modelUri"
                     modelBuilder.makeNodeFromGlb(viewContext, arSceneView, nodeName, assetPath, transformation, enablePans, enableRotation, objectManagerChannel)
-                }
+                            }
                 4 -> { // fileSystemAppFolderGLTF2
                     val documentsPath = viewContext.applicationInfo.dataDir
                     val assetPath = "$documentsPath/app_flutter/$modelUri"
@@ -654,15 +675,15 @@ internal class AndroidARView(
                 }
                                     } else {
                 false
-            }
+                                    }
         } catch (e: Exception) {
             Log.e(TAG, "Error adding node: ${e.message}")
                                 val mainHandler = Handler(viewContext.mainLooper)
             mainHandler.post {
                 sessionManagerChannel.invokeMethod("onError", listOf("Unable to load renderable: ${e.message}"))
-            }
+                            }
             false
-        }
+                }
     }
 
     private fun transformNode(name: String, transform: ArrayList<Double>) {
@@ -692,23 +713,23 @@ internal class AndroidARView(
                 if (nodeName != null && nodesByName.containsKey(nodeName)) {
                     Log.d(TAG, "Node tapped: $nodeName")
                     objectManagerChannel.invokeMethod("onNodeTap", listOf(nodeName))
-                    return true
-                }
+            return true
+        }
             }
             
             // Handle plane/point tap using ARCore hit test
-            val allHitResults = frame?.hitTest(motionEvent) ?: listOf<HitResult>()
+                val allHitResults = frame?.hitTest(motionEvent) ?: listOf<HitResult>()
             val planeAndPointHitResults = allHitResults.filter { 
                 (it.trackable is Plane) || (it.trackable is Point) 
             }
-            val serializedPlaneAndPointHitResults: ArrayList<HashMap<String, Any>> =
+                val serializedPlaneAndPointHitResults: ArrayList<HashMap<String, Any>> =
                     ArrayList(planeAndPointHitResults.map { serializeHitResult(it) })
             sessionManagerChannel.invokeMethod("onPlaneOrPointTap", serializedPlaneAndPointHitResults)
-            return true
+                return true
         }
-        return false
-    }
-    
+                return false
+            }
+
     /**
      * Pick a node at the given screen coordinates
      * Uses ARCore hit testing and checks against our tracked nodes

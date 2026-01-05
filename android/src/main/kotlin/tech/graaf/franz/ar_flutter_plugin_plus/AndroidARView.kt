@@ -505,10 +505,10 @@ internal class AndroidARView(
             Log.w(TAG, "Feature points visualization is limited in SceneView 2.x - nodes created but may not be visible")
         }
 
-        // Configure tap handling  
+        // Configure tap handling using SceneView's built-in node picking
         if (argHandleTaps == true) {
-            arSceneView.setOnTouchListener { _, motionEvent ->
-                onTap(motionEvent)
+            arSceneView.onTouchEvent = { motionEvent, hitResult ->
+                onTap(motionEvent, hitResult)
             }
         }
 
@@ -699,22 +699,24 @@ internal class AndroidARView(
         }
     }
 
-    private fun onTap(motionEvent: MotionEvent): Boolean {
+    private fun onTap(motionEvent: MotionEvent, hitResult: io.github.sceneview.collision.HitResult?): Boolean {
         val frame = currentFrame
         
         if (motionEvent.action == MotionEvent.ACTION_DOWN) {
-            val x = motionEvent.x
-            val y = motionEvent.y
-            
-            // First check if a node was tapped using SceneView's picking
-            val tappedNode = pickNodeAtScreenPosition(x, y)
-            if (tappedNode != null) {
-                val nodeName = tappedNode.name
-                if (nodeName != null && nodesByName.containsKey(nodeName)) {
-                    Log.d(TAG, "Node tapped: $nodeName")
-                    objectManagerChannel.invokeMethod("onNodeTap", listOf(nodeName))
+            // First check if a 3D model node was tapped using SceneView's built-in picking
+            if (hitResult != null) {
+                val hitNode = hitResult.node
+                // Walk up the node hierarchy to find our tracked model node
+                var currentNode: io.github.sceneview.node.Node? = hitNode
+                while (currentNode != null) {
+                    val nodeName = currentNode.name
+                    if (nodeName != null && nodesByName.containsKey(nodeName)) {
+                        Log.d(TAG, "3D Model tapped: $nodeName")
+                        objectManagerChannel.invokeMethod("onNodeTap", listOf(nodeName))
             return true
         }
+                    currentNode = currentNode.parent as? io.github.sceneview.node.Node
+                }
             }
             
             // Handle plane/point tap using ARCore hit test
@@ -727,45 +729,7 @@ internal class AndroidARView(
             sessionManagerChannel.invokeMethod("onPlaneOrPointTap", serializedPlaneAndPointHitResults)
                 return true
         }
-                return false
-            }
-
-    /**
-     * Pick a node at the given screen coordinates
-     * Uses ARCore hit testing and checks against our tracked nodes
-     */
-    private fun pickNodeAtScreenPosition(x: Float, y: Float): io.github.sceneview.node.Node? {
-        val frame = currentFrame ?: return null
-        
-        // Create hit test from screen position
-        val hitResults = frame.hitTest(x, y)
-        
-        // Check if any hit result corresponds to a tracked node
-        for (hitResult in hitResults) {
-            val trackable = hitResult.trackable
-            val hitPose = hitResult.hitPose
-            
-            // Check each model node for proximity to the hit point
-            for ((name, node) in nodesByName) {
-                val nodePos = node.worldPosition
-                val hitPos = hitPose.translation
-                
-                // Calculate distance between hit point and node center
-                val dx = nodePos.x - hitPos[0]
-                val dy = nodePos.y - hitPos[1]
-                val dz = nodePos.z - hitPos[2]
-                val distance = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
-                
-                // If hit is close to the node (within reasonable threshold)
-                // The threshold depends on the model size, using 0.2m as default
-                if (distance < 0.3f) {
-                    Log.d(TAG, "Hit near node: $name (distance: $distance)")
-                    return node
-                }
-            }
-        }
-        
-        return null
+        return false
     }
 
     private fun addPlaneAnchor(transform: ArrayList<Double>, name: String): Boolean {

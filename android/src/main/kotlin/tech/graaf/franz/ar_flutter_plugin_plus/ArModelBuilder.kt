@@ -20,7 +20,7 @@ import tech.graaf.franz.ar_flutter_plugin_plus.Serialization.deserializeMatrix4
 
 // Responsible for creating Renderables and Nodes
 class ArModelBuilder {
-    
+
     private val TAG = "ArModelBuilder"
 
     // Creates feature point node using CubeNode
@@ -56,7 +56,7 @@ class ArModelBuilder {
     suspend fun makeWorldOriginNode(context: Context, arSceneView: ARSceneView): Node? {
         return withContext(Dispatchers.Main) {
             try {
-                val axisSize = 0.1f
+        val axisSize = 0.1f
                 val axisThickness = 0.005f
                 val rootNode = Node(arSceneView.engine)
                 
@@ -120,7 +120,7 @@ class ArModelBuilder {
     ): ModelNode? {
         return loadModelNode(context, arSceneView, name, modelPath, transformation, enablePans, enableRotation, objectManagerChannel)
     }
-    
+
     // Unified model loading for both GLB and GLTF
     private suspend fun loadModelNode(
         context: Context,
@@ -221,10 +221,10 @@ class ArModelBuilder {
                 Log.e(TAG, "Error loading model: ${e.message}")
                 e.printStackTrace()
                 null
-            }
         }
     }
-    
+}
+
     private fun setupGestureHandling(
         modelNode: ModelNode,
         objectManagerChannel: MethodChannel,

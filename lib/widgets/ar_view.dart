@@ -1,5 +1,4 @@
 import 'package:ar_flutter_plugin_plus/managers/ar_anchor_manager.dart';
-import 'package:ar_flutter_plugin_plus/managers/ar_location_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -11,8 +10,7 @@ import 'package:ar_flutter_plugin_plus/datatypes/config_planedetection.dart';
 typedef ARViewCreatedCallback = void Function(
     ARSessionManager arSessionManager,
     ARObjectManager arObjectManager,
-    ARAnchorManager arAnchorManager,
-    ARLocationManager arLocationManager);
+    ARAnchorManager arAnchorManager);
 
 /// Factory method for creating a platform-dependent AR view
 abstract class PlatformARView {
@@ -48,7 +46,7 @@ createManagers(
     return;
   }
   arViewCreatedCallback(ARSessionManager(id, context, planeDetectionConfig),
-      ARObjectManager(id), ARAnchorManager(id), ARLocationManager());
+      ARObjectManager(id), ARAnchorManager(id));
 }
 
 /// Android-specific implementation of [PlatformARView]

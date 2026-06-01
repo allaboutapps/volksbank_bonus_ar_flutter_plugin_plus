@@ -1,7 +1,6 @@
 import 'package:ar_flutter_plugin_plus/datatypes/config_planedetection.dart';
 import 'package:ar_flutter_plugin_plus/datatypes/node_types.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_anchor_manager.dart';
-import 'package:ar_flutter_plugin_plus/managers/ar_location_manager.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_object_manager.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_session_manager.dart';
 import 'package:ar_flutter_plugin_plus/models/ar_anchor.dart';
@@ -21,17 +20,14 @@ class _ImageMarkerTrackingState extends State<ImageMarkerTracking> {
   ARSessionManager? arSessionManager;
   ARObjectManager? arObjectManager;
   ARAnchorManager? arAnchorManager;
-  ARLocationManager? arLocationManager;
 
   ARAnchor? anchor;
   ARNode? node;
 
-  void onARViewCreated(ARSessionManager arSessionManager, ARObjectManager arObjectManager, ARAnchorManager arAnchorManager,
-      ARLocationManager arLocationManager) {
+  void onARViewCreated(ARSessionManager arSessionManager, ARObjectManager arObjectManager, ARAnchorManager arAnchorManager) {
     this.arSessionManager = arSessionManager;
     this.arObjectManager = arObjectManager;
     this.arAnchorManager = arAnchorManager;
-    this.arLocationManager = arLocationManager;
 
     this.arSessionManager!.onInitialize(
       showFeaturePoints: false,

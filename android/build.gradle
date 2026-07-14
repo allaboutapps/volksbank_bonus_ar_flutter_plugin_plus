@@ -39,11 +39,11 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0")
 
     // Kotlin Coroutines (required for SceneView 2.0+)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     // Google ARCore - 16KB page size compatible
-    implementation("com.google.ar:core:1.51.0")
+    implementation("com.google.ar:core:1.54.0")
     
     // SceneView 2.0+ - 16KB page size compatible (replaces deprecated Sceneform)
     // This includes Filament rendering engine with 16KB support
@@ -51,8 +51,10 @@ dependencies {
 
     // AndroidX + Play Services
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("com.google.android.gms:play-services-auth:20.7.0")
+    // 2.9.x is the last line compatible with compileSdk 36 / AGP 8.11.1;
+    // 2.10+ transitively pulls lifecycle-runtime-compose which requires compileSdk 37 + AGP 9.1.0
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    implementation("com.google.android.gms:play-services-auth:21.6.0")
 }
 
 // Kotlin toolchain is configured via compileOptions and kotlinOptions above

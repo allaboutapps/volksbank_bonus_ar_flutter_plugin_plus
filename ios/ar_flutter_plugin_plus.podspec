@@ -20,7 +20,7 @@ A Flutter plugin for AR experiences supporting Android and iOS.
   s.static_framework = true
   #s.dependency 'ARCore/CloudAnchors', '~> 1.12.0'
   #s.dependency 'ARCore', '~> 1.2.0'
-  s.dependency 'ARCore/CloudAnchors', '~> 1.51.0' # Updated to support Firebase 12.x
+  s.dependency 'ARCore/CloudAnchors', '~> 1.54.0' # Updated to support Firebase 12.x
   s.platform = :ios, '15.0'
 
 

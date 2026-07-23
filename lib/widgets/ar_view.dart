@@ -1,5 +1,8 @@
 import 'package:ar_flutter_plugin_plus/managers/ar_anchor_manager.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:ar_flutter_plugin_plus/managers/ar_session_manager.dart';
@@ -75,12 +78,40 @@ class AndroidARView implements PlatformARView {
     // Pass parameters to the platform side.
     final Map<String, dynamic> creationParams = <String, dynamic>{};
 
-    return AndroidView(
+    // Use Hybrid Composition (initExpensiveAndroidView) instead of the legacy
+    // Virtual Display (AndroidView). Virtual Display detaches and re-attaches the
+    // native view on every app resume (PlatformViewsController.onResume ->
+    // VirtualDisplayController.resetSurface). sceneview's SceneView.onDetachedFromWindow
+    // reacts to that transient detach by calling destroy(), which frees the native
+    // ARCore session; the subsequent re-attach layout pass then calls
+    // setDisplayGeometry on the freed session and crashes (SIGSEGV), or leaves a
+    // black camera because the session was torn down. Hybrid Composition keeps the
+    // native view attached across resume, so none of that happens. See VB-151.
+    return PlatformViewLink(
       viewType: viewType,
-      layoutDirection: TextDirection.ltr,
-      creationParams: creationParams,
-      creationParamsCodec: const StandardMessageCodec(),
-      onPlatformViewCreated: onPlatformViewCreated,
+      surfaceFactory: (context, controller) {
+        return AndroidViewSurface(
+          controller: controller as AndroidViewController,
+          gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{},
+          hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+        );
+      },
+      onCreatePlatformView: (PlatformViewCreationParams params) {
+        final AndroidViewController controller =
+            PlatformViewsService.initExpensiveAndroidView(
+          id: params.id,
+          viewType: viewType,
+          layoutDirection: TextDirection.ltr,
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+          onFocus: () => params.onFocusChanged(true),
+        );
+        controller
+          ..addOnPlatformViewCreatedListener(params.onPlatformViewCreated)
+          ..addOnPlatformViewCreatedListener(onPlatformViewCreated)
+          ..create();
+        return controller;
+      },
     );
   }
 }

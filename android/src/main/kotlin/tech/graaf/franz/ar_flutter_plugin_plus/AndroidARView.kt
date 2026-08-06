@@ -747,7 +747,7 @@ internal class AndroidARView(
                         val imageName = imagePath.substringAfterLast("/").substringBeforeLast(".")
                         Log.d(TAG, "Loading image: $imageName, size: ${bitmap.width}x${bitmap.height}")
                         
-                        val physicalWidth = 0.1f // 10cm
+                        val physicalWidth = 0.25f // 25cm
                         val index = imageDatabase.addImage(imageName, bitmap, physicalWidth)
                         
                         if (index != -1) {

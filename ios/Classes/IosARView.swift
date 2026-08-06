@@ -892,7 +892,7 @@ class IosARView: NSObject, FlutterPlatformView, ARSCNViewDelegate, UIGestureReco
                 print("Loading image: \(imageName), size: \(image.size.width)x\(image.size.height)")
                 
                 // Create ARReferenceImage with a default physical width (you may want to make this configurable)
-                let physicalWidth: Float = 0.30 // 30cm default width - adjust based on your actual printed image size
+                let physicalWidth: Float = 0.25 // 25cm default width - adjust based on your actual printed image size
                 let referenceImage = ARReferenceImage(image.cgImage!, orientation: .up, physicalWidth: CGFloat(physicalWidth))
                 referenceImage.name = imageName
                 
